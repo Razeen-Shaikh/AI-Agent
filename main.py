@@ -1,3 +1,9 @@
+import sys
+
+# Windows console defaults to cp1252, which can't print many Unicode chars
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
@@ -56,8 +62,23 @@ agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 query = input("What can i help you research? ")
 raw_response = agent_executor.invoke({"query": query})
 
+output = raw_response.get("output")
+if isinstance(output, list):
+    # The model can return multiple content blocks (dicts or plain strings);
+    # join all text parts to reconstruct the full answer
+    parts = []
+    for block in output:
+        if isinstance(block, dict):
+            if block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        else:
+            parts.append(str(block))
+    output_text = "".join(parts)
+else:
+    output_text = output
+
 try:
-    structured_response = parser.parse(raw_response.get("output")[0]["text"])
+    structured_response = parser.parse(output_text)
     print(structured_response)
 except Exception as e:
     print("Error parsing response", e, "Raw Response - ", raw_response)
